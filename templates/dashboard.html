@@ -1,241 +1,343 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% block title %}Dashboard | Periodly{% endblock %}
 
-    <title>Dashboard | Period Tracker</title>
+{% block content %}
 
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='css/style.css') }}"
-    >
-</head>
+<section class="dashboard">
 
-<body>
-
-    <!-- Navigation -->
-    <header class="navbar">
-
-        <div class="logo">
-            <a href="/">Period Tracker</a>
+    <div class="dashboard-header">
+        <div>
+            <p class="dashboard-eyebrow">YOUR CYCLE</p>
+            <h1>Welcome back, {{ user["name"] }} 👋</h1>
+            <p class="dashboard-subtitle">
+                Here's an overview of your cycle.
+            </p>
         </div>
 
-        <nav>
-            <a href="/dashboard">Dashboard</a>
-            <a href="/history">History</a>
-            <a href="/log-period">Log Period</a>
-            <a href="/logout">Logout</a>
-        </nav>
+        <a
+            href="{{ url_for('log_period') }}"
+            class="primary-button dashboard-action"
+        >
+            + Log Period
+        </a>
+    </div>
 
-    </header>
+
+    {% if last_period %}
+
+    <!-- Cycle Overview -->
+
+    <div class="cycle-overview">
+
+        <div class="cycle-card cycle-main-card">
+
+            <div class="cycle-card-header">
+                <div>
+                    <p class="card-label">NEXT PERIOD</p>
+
+                    {% if next_period %}
+                    <h2>
+                        {{ next_period.strftime("%B %d") }}
+                    </h2>
+
+                    <p class="card-muted">
+                        {% if days_until_next_period > 0 %}
+                            In {{ days_until_next_period }} days
+                        {% elif days_until_next_period == 0 %}
+                            Expected today
+                        {% else %}
+                            Estimated date has passed
+                        {% endif %}
+                    </p>
+
+                    {% else %}
+                    <h2>Not available</h2>
+                    {% endif %}
+                </div>
+
+                <div class="cycle-icon">
+                    🌸
+                </div>
+            </div>
+
+            <div class="cycle-progress">
+
+                <div class="progress-labels">
+                    <span>Cycle day {{ cycle_day }}</span>
+                    <span>{{ average_cycle_length }} days</span>
+                </div>
+
+                <div class="progress-track">
+                    <div
+                        class="progress-fill"
+                        style="width: {{ ((cycle_day / average_cycle_length) * 100) if cycle_day and cycle_day < average_cycle_length else 100 }}%;"
+                    ></div>
+                </div>
+
+            </div>
+
+        </div>
 
 
-    <!-- Main Dashboard -->
-    <main class="dashboard">
+        <div class="cycle-stat-card">
 
-        <!-- Welcome Section -->
-        <section class="welcome">
+            <div class="stat-icon pink-icon">
+                🩷
+            </div>
 
             <div>
-                <h1>Hello, {{ user_name }} 👋</h1>
+                <p class="card-label">AVERAGE CYCLE</p>
+                <h3>{{ average_cycle_length }} days</h3>
+                <p class="card-muted">Based on your history</p>
+            </div>
 
-                <p>
-                    Here's an overview of your current cycle.
+        </div>
+
+
+        <div class="cycle-stat-card">
+
+            <div class="stat-icon purple-icon">
+                ◉
+            </div>
+
+            <div>
+                <p class="card-label">PERIOD LENGTH</p>
+                <h3>{{ average_period_length }} days</h3>
+                <p class="card-muted">Average duration</p>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Predictions -->
+
+    <div class="section-heading">
+        <div>
+            <p class="dashboard-eyebrow">ESTIMATES</p>
+            <h2>Cycle predictions</h2>
+        </div>
+    </div>
+
+    <div class="prediction-grid">
+
+        <div class="prediction-card fertile-card">
+
+            <div class="prediction-icon">
+                🌱
+            </div>
+
+            <div>
+                <p class="card-label">FERTILE WINDOW</p>
+
+                {% if fertile_start and fertile_end %}
+                <h3>
+                    {{ fertile_start.strftime("%b %d") }}
+                    –
+                    {{ fertile_end.strftime("%b %d") }}
+                </h3>
+
+                <p class="card-muted">
+                    Estimated fertile days
                 </p>
+                {% else %}
+                <h3>Not available</h3>
+                <p class="card-muted">
+                    Log more periods to see predictions.
+                </p>
+                {% endif %}
             </div>
 
-            <a href="/log-period" class="btn">
-                + Log Period
-            </a>
-
-        </section>
+        </div>
 
 
-        <!-- Cycle Overview -->
-        <section class="cycle-overview">
+        <div class="prediction-card ovulation-card">
 
-            <div class="card cycle-day">
-
-                <h3>Current Cycle</h3>
-
-                <div class="big-number">
-                    {{ cycle_day }}
-                </div>
-
-                <p>Cycle Day</p>
-
+            <div class="prediction-icon">
+                ✦
             </div>
 
+            <div>
+                <p class="card-label">ESTIMATED OVULATION</p>
 
-            <div class="card">
+                {% if ovulation_date %}
+                <h3>
+                    {{ ovulation_date.strftime("%B %d") }}
+                </h3>
 
-                <h3>Next Period</h3>
-
-                <div class="date">
-                    {{ next_period }}
-                </div>
-
-                <p>Estimated date</p>
-
+                <p class="card-muted">
+                    Based on your average cycle
+                </p>
+                {% else %}
+                <h3>Not available</h3>
+                {% endif %}
             </div>
 
+        </div>
 
-            <div class="card">
-
-                <h3>Ovulation</h3>
-
-                <div class="date">
-                    {{ ovulation_date }}
-                </div>
-
-                <p>Estimated date</p>
-
-            </div>
+    </div>
 
 
-            <div class="card">
+    <!-- Calendar -->
 
-                <h3>Cycle Length</h3>
+    <div class="section-heading calendar-heading">
 
-                <div class="big-number">
-                    {{ cycle_length }}
-                </div>
+        <div>
+            <p class="dashboard-eyebrow">YOUR MONTH</p>
+            <h2>
+                {{ current_month_name }} {{ current_year }}
+            </h2>
+        </div>
 
-                <p>Days</p>
-
-            </div>
-
-        </section>
-
-
-        <!-- Fertile Window -->
-        <section class="card fertile-window">
-
-            <h2>Estimated Fertile Window</h2>
-
-            <p>
-                Your estimated fertile window is:
-            </p>
-
-            <div class="fertile-dates">
-                {{ fertile_start }} – {{ fertile_end }}
-            </div>
-
-            <small>
-                These dates are estimates and may vary from cycle to cycle.
-            </small>
-
-        </section>
+    </div>
 
 
-        <!-- Quick Actions -->
-        <section class="quick-actions">
+    <div class="calendar-card">
 
-            <h2>Quick Actions</h2>
+        <div class="calendar-weekdays">
+            <span>Sun</span>
+            <span>Mon</span>
+            <span>Tue</span>
+            <span>Wed</span>
+            <span>Thu</span>
+            <span>Fri</span>
+            <span>Sat</span>
+        </div>
 
-            <div class="action-container">
+        <div class="calendar-grid">
 
-                <a href="/log-period" class="action-card">
-                    <span>🩸</span>
-                    <h3>Log Period</h3>
-                    <p>Record your latest period.</p>
-                </a>
+            {% for week in month_calendar %}
 
+                {% for day in week %}
 
-                <a href="/symptoms" class="action-card">
-                    <span>📝</span>
-                    <h3>Log Symptoms</h3>
-                    <p>Track how you're feeling.</p>
-                </a>
+                    {% if day == 0 %}
 
+                        <div class="calendar-day empty"></div>
 
-                <a href="/history" class="action-card">
-                    <span>📅</span>
-                    <h3>View History</h3>
-                    <p>See your previous cycles.</p>
-                </a>
+                    {% else %}
 
-            </div>
+                        <div class="calendar-day
+                            {% if day in period_dates %}
+                                period-day
+                            {% elif day == ovulation_day %}
+                                ovulation-day
+                            {% elif day in fertile_dates %}
+                                fertile-day
+                            {% endif %}
 
-        </section>
+                            {% if day == current_day %}
+                                today
+                            {% endif %}
+                        ">
 
-
-        <!-- Recent Periods -->
-        <section class="card recent-periods">
-
-            <div class="section-header">
-
-                <h2>Recent Periods</h2>
-
-                <a href="/history">
-                    View all
-                </a>
-
-            </div>
-
-
-            {% if periods %}
-
-                <div class="period-list">
-
-                    {% for period in periods %}
-
-                        <div class="period-item">
-
-                            <div>
-                                <strong>
-                                    {{ period.start_date }}
-                                </strong>
-
-                                <p>
-                                    {{ period.period_length }} days
-                                </p>
-                            </div>
-
-                            <span>
-                                {{ period.cycle_length }} day cycle
-                            </span>
+                            <span>{{ day }}</span>
 
                         </div>
 
-                    {% endfor %}
+                    {% endif %}
 
-                </div>
+                {% endfor %}
 
-            {% else %}
+            {% endfor %}
 
-                <div class="empty-state">
+        </div>
 
-                    <p>
-                        You haven't logged any periods yet.
-                    </p>
-
-                    <a href="/log-period" class="btn">
-                        Log Your First Period
-                    </a>
-
-                </div>
-
-            {% endif %}
-
-        </section>
+    </div>
 
 
-    </main>
+    <!-- Recent History -->
+
+    <div class="section-heading history-heading">
+
+        <div>
+            <p class="dashboard-eyebrow">RECENT ACTIVITY</p>
+            <h2>Recent periods</h2>
+        </div>
+
+        <a href="{{ url_for('history') }}">
+            View history →
+        </a>
+
+    </div>
 
 
-    <!-- Footer -->
-    <footer>
+    <div class="recent-periods">
+
+    {% for item in recent_periods %}
+
+        {% set period = item["period"] %}
+
+        <div class="recent-period">
+
+            <div class="recent-period-icon">
+                🌸
+            </div>
+
+            <div class="recent-period-info">
+
+                <strong>
+                    {{ period["start_date"] }}
+                </strong>
+
+                <span>
+                    {{ period["flow"]|capitalize }} flow
+                </span>
+
+            </div>
+
+            <div class="recent-period-duration">
+
+                {% if item["duration"] %}
+                    {{ item["duration"] }} days
+                {% else %}
+                    Ongoing
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    {% endfor %}
+
+</div>
+
+
+    <p class="dashboard-disclaimer">
+        Period and fertility predictions are estimates based on your
+        logged data and should not be used as medical advice.
+    </p>
+
+
+    {% else %}
+
+    <!-- Empty Dashboard -->
+
+    <div class="empty-dashboard">
+
+        <div class="empty-dashboard-icon">
+            🌸
+        </div>
+
+        <h2>Let's start tracking your cycle</h2>
 
         <p>
-            Period Tracker © 2026
+            Log your first period to start seeing cycle insights,
+            predictions and history here.
         </p>
 
-    </footer>
+        <a
+            href="{{ url_for('log_period') }}"
+            class="primary-button empty-dashboard-button"
+        >
+            Log Your First Period
+        </a>
 
+    </div>
 
-</body>
+    {% endif %}
 
-</html>
+</section>
+
+{% endblock %}
