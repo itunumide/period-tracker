@@ -1,261 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Period History</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='history.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
 
-    <header>
-        <h1>Period History</h1>
-        <p>Track your cycles, patterns and symptoms over time.</p>
-    </header>
+{% block title %}Period History | Periodly{% endblock %}
 
-    <main>
+{% block content %}
+<section class="history-page">
 
-        <!-- Overview -->
-        <section aria-labelledby="overview-title">
-            <h2 id="overview-title">Overview</h2>
+    <div class="history-page-header">
+        <div>
+            <p class="dashboard-eyebrow">YOUR CYCLE JOURNAL</p>
+            <h1>Period History</h1>
+            <p class="history-subtitle">
+                Keep track of your periods and review your cycle patterns.
+            </p>
+        </div>
 
+        <a href="{{ url_for('log_period') }}" class="primary-button">
+            + Log a Period
+        </a>
+    </div>
+
+    <div class="history-summary">
+        <div class="history-summary-card">
+            <span class="history-summary-icon">♡</span>
             <div>
-                <h3>Current Cycle</h3>
-                <p>Day 14 of 28</p>
+                <p>Total Records</p>
+                <h2>{{ history_periods|length }}</h2>
             </div>
+        </div>
 
+        <div class="history-summary-card">
+            <span class="history-summary-icon">✿</span>
             <div>
-                <h3>Average Cycle Length</h3>
-                <p>28 days</p>
-                <small>Over the last 6 months</small>
+                <p>Tracking Progress</p>
+                <h2>
+                    {% if history_periods|length == 0 %}
+                        Get started
+                    {% elif history_periods|length == 1 %}
+                        1 period logged
+                    {% else %}
+                        {{ history_periods|length }} periods logged
+                    {% endif %}
+                </h2>
             </div>
+        </div>
+    </div>
 
-            <div>
-                <h3>Average Period Length</h3>
-                <p>5 days</p>
-                <small>Over the last 6 months</small>
-            </div>
+    <div class="history-section-heading">
+        <div>
+            <h2>Your records</h2>
+            <p>Most recent periods appear first.</p>
+        </div>
+    </div>
 
-            <div>
-                <h3>Next Period</h3>
-                <p>October 10, 2026</p>
-            </div>
+    {% if history_periods %}
+        <div class="history-list">
 
-            <div>
-                <h3>Ovulation Window</h3>
-                <p>September 25 – September 30</p>
-            </div>
-        </section>
+            {% for item in history_periods %}
+                {% set period = item["period"] %}
 
-        <!-- History Controls -->
-        <section aria-labelledby="history-title">
-            <h2 id="history-title">Cycle History</h2>
+                <article class="history-card">
 
-            <div>
-                <button type="button">List View</button>
-                <button type="button">Calendar View</button>
-            </div>
-        </section>
+                    <div class="history-card-top">
+                        <div class="history-date-icon">♡</div>
 
-        <!-- Period History -->
-        <section aria-labelledby="periods-title">
-            <h2 id="periods-title">Past Periods</h2>
+                        <div class="history-card-heading">
+                            <h3>
+                                {{ period['start_date']|date if false else period['start_date'] }}
+                            </h3>
 
-            <article>
-                <h3>September 2026</h3>
+                            <p>
+                                {% if period['end_date'] %}
+                                    {{ period['start_date'] }} — {{ period['end_date'] }}
+                                {% else %}
+                                    Started {{ period['start_date'] }} · Ongoing
+                                {% endif %}
+                            </p>
+                        </div>
 
-                <p>
-                    <strong>Sep 2 – Sep 6, 2026</strong>
-                </p>
-
-                <p>
-                    Cycle length: <strong>29 days</strong>
-                </p>
-
-                <p>
-                    Period length: <strong>5 days</strong>
-                </p>
-
-                <p>
-                    Status: <strong>2 days late</strong>
-                </p>
-
-                <details>
-                    <summary>View details</summary>
-
-                    <div>
-                        <h4>Flow</h4>
-                        <p>Medium</p>
+                        <span class="flow-badge flow-badge-{{ period['flow']|lower }}">
+                            {{ period['flow']|capitalize if period['flow'] else 'Not specified' }}
+                        </span>
                     </div>
 
-                    <div>
-                        <h4>Symptoms</h4>
-                        <p>Cramps, Headache</p>
+                    <div class="history-card-content">
+
+                        <div class="history-detail">
+                            <span class="history-detail-label">Duration</span>
+                            <span class="history-detail-value">
+                                {% if period['end_date'] %}
+                                    {{ item.get('duration', '—') }}
+                                    {% if item.get('duration') == 1 %}day{% else %}days{% endif %}
+                                {% else %}
+                                    Ongoing
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="history-detail">
+                            <span class="history-detail-label">Flow level</span>
+                            <span class="history-detail-value">
+                                {{ period['flow']|capitalize if period['flow'] else 'Not specified' }}
+                            </span>
+                        </div>
+
+                        <div class="history-symptoms">
+                            <span class="history-detail-label">Symptoms</span>
+
+                            {% if period['symptoms'] %}
+                                <div class="history-symptom-list">
+                                    {% for symptom in period['symptoms'].split(',') %}
+                                        <span class="history-symptom">
+                                            {{ symptom.strip()|capitalize }}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="history-no-symptoms">
+                                    No symptoms recorded.
+                                </p>
+                            {% endif %}
+                        </div>
+
                     </div>
 
-                    <div>
-                        <h4>Mood</h4>
-                        <p>Good</p>
+                    <div class="history-actions">
+                        <a
+                            href="{{ url_for('edit_period', period_id=period['id']) }}"
+                            class="secondary-button"
+                        >
+                            Edit
+                        </a>
+
+                        <form
+                            method="POST"
+                            action="{{ url_for('delete_period', period_id=period['id']) }}"
+                            onsubmit="return confirm('Are you sure you want to permanently delete this period record?');"
+                        >
+                            <button type="submit" class="delete-button">
+                                Delete
+                            </button>
+                        </form>
                     </div>
 
-                    <div>
-                        <h4>Energy</h4>
-                        <p>Moderate</p>
-                    </div>
+                </article>
 
-                    <div>
-                        <h4>Notes</h4>
-                        <p>No notes added.</p>
-                    </div>
+            {% endfor %}
 
-                    <div>
-                        <h4>Spotting</h4>
-                        <p>None</p>
-                    </div>
-                </details>
-            </article>
+        </div>
 
-            <article>
-                <h3>August 2026</h3>
+    {% else %}
 
-                <p>
-                    <strong>Aug 4 – Aug 8, 2026</strong>
-                </p>
+        <div class="history-empty-state">
+            <div class="history-empty-icon">♡</div>
+            <h2>Your journey starts here</h2>
+            <p>
+                You haven't logged a period yet. Start tracking your cycle
+                to build your personal history.
+            </p>
 
-                <p>
-                    Cycle length: <strong>28 days</strong>
-                </p>
+            <a href="{{ url_for('log_period') }}" class="primary-button">
+                Log Your First Period
+            </a>
+        </div>
 
-                <p>
-                    Period length: <strong>5 days</strong>
-                </p>
+    {% endif %}
 
-                <p>
-                    Status: <strong>On time</strong>
-                </p>
-
-                <details>
-                    <summary>View details</summary>
-
-                    <div>
-                        <h4>Flow</h4>
-                        <p>Heavy</p>
-                    </div>
-
-                    <div>
-                        <h4>Symptoms</h4>
-                        <p>Cramps, Mood changes</p>
-                    </div>
-
-                    <div>
-                        <h4>Mood</h4>
-                        <p>Low</p>
-                    </div>
-
-                    <div>
-                        <h4>Energy</h4>
-                        <p>Low</p>
-                    </div>
-
-                    <div>
-                        <h4>Notes</h4>
-                        <p>No notes added.</p>
-                    </div>
-
-                    <div>
-                        <h4>Spotting</h4>
-                        <p>None</p>
-                    </div>
-                </details>
-            </article>
-
-            <article>
-                <h3>July 2026</h3>
-
-                <p>
-                    <strong>Jul 7 – Jul 11, 2026</strong>
-                </p>
-
-                <p>
-                    Cycle length: <strong>28 days</strong>
-                </p>
-
-                <p>
-                    Period length: <strong>5 days</strong>
-                </p>
-
-                <p>
-                    Status: <strong>On time</strong>
-                </p>
-
-                <details>
-                    <summary>View details</summary>
-
-                    <div>
-                        <h4>Flow</h4>
-                        <p>Light</p>
-                    </div>
-
-                    <div>
-                        <h4>Symptoms</h4>
-                        <p>Headache</p>
-                    </div>
-
-                    <div>
-                        <h4>Mood</h4>
-                        <p>Good</p>
-                    </div>
-
-                    <div>
-                        <h4>Energy</h4>
-                        <p>High</p>
-                    </div>
-
-                    <div>
-                        <h4>Notes</h4>
-                        <p>No notes added.</p>
-                    </div>
-
-                    <div>
-                        <h4>Spotting</h4>
-                        <p>None</p>
-                    </div>
-                </details>
-            </article>
-        </section>
-
-        <!-- Insights -->
-        <section aria-labelledby="insights-title">
-            <h2 id="insights-title">Insights</h2>
-
-            <div>
-                <h3>Regularity</h3>
-                <p>Regular</p>
-            </div>
-
-            <div>
-                <h3>Longest Cycle</h3>
-                <p>30 days</p>
-            </div>
-
-            <div>
-                <h3>Shortest Cycle</h3>
-                <p>27 days</p>
-            </div>
-
-            <div>
-                <h3>Missed Periods</h3>
-                <p>None recorded</p>
-            </div>
-
-            <div>
-                <h3>Cycle Length Trend</h3>
-                <p>Your cycle length has remained relatively consistent over the last 6 months.</p>
-            </div>
-        </section>
-
-    </main>
-
-</body>
-</html>
-
+</section>
+{% endblock %}
