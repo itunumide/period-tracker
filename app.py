@@ -1,15 +1,39 @@
+app.py
+
+
+import calendar
 import os
 import sqlite3
 from datetime import date, timedelta
-from statistics import mean
+from functools import wraps
 
-from flask import Flask, flash, g, redirect, render_template, request, session, redirect, url_for
+from flask import (
+    Flask,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from werkzeug.security import (
+    check_password_hash,
+    generate_password_hash,
+)
+
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-DB_PATH = os.environ.get("DATABASE", "periods.db")
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY", "dev-secret-change-me"
+)
+app.config["DATABASE"] = os.environ.get(
+    "DATABASE", "periods.db"
+)
+
 FLOW_LEVELS = ["spotting", "light", "medium", "heavy"]
+
 SYMPTOMS = [
     "cramps",
     "headache",
@@ -21,16 +45,24 @@ SYMPTOMS = [
     "backache",
 ]
 
+DEFAULT_CYCLE_LENGTH = 28
+DEFAULT_PERIOD_LENGTH = 5
+
+
+# =========================================================
+# DATABASE
+# =========================================================
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        g.db = sqlite3.connect(app.config["DATABASE"])
         g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 
 @app.teardown_appcontext
-def close_db(_exc):
+def close_db(exception=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
@@ -38,64 +70,44 @@ def close_db(_exc):
 
 def init_db():
     db = get_db()
-    db.execute(
+
+    db.executescript(
         """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS periods (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            start_date TEXT NOT NULL,
-            end_date TEXT,
+            user_id INTEGER NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE,
             flow TEXT NOT NULL,
-            symptoms TEXT NOT NULL DEFAULT '',
-            notes TEXT NOT NULL DEFAULT ''
-        )
+            symptoms TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS user_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            average_cycle_length INTEGER DEFAULT 28,
+            average_period_length INTEGER DEFAULT 5,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        );
         """
     )
     db.commit()
 
-
-def get_periods():
-    rows = get_db().execute(
-        "SELECT * FROM periods ORDER BY start_date DESC, id DESC"
-    ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def get_insights():
-    periods = get_periods()
-    starts = sorted(date.fromisoformat(p["start_date"]) for p in periods)
-
-    cycle_lengths = [
-        (later - earlier).days for earlier, later in zip(starts, starts[1:])
-    ][-6:]
-
-    period_lengths = [
-        (
-            date.fromisoformat(p["end_date"]) - date.fromisoformat(p["start_date"])
-        ).days
-        + 1
-        for p in periods
-        if p["end_date"]
-    ][-6:]
-
-    avg_cycle = round(mean(cycle_lengths)) if cycle_lengths else 28
-    avg_period = round(mean(period_lengths)) if period_lengths else 5
-    next_start = starts[-1] + timedelta(days=avg_cycle) if starts else None
-
-    return {
-        "avg_cycle": avg_cycle,
-        "avg_period": avg_period,
-        "cycles_logged": len(cycle_lengths),
-        "last_start": starts[-1] if starts else None,
-        "next_start": next_start,
-    }
-
-
-app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY", "dev-secret-change-me"
-)
-app.config["DATABASE"] = os.environ.get(
-    "DATABASE", "periods.db"
-)
 
 # =========================================================
 # AUTHENTICATION
@@ -123,73 +135,103 @@ def get_current_user():
         (user_id,),
     ).fetchone()
 
+
+# =========================================================
+# CYCLE CALCULATIONS
+# =========================================================
+
+def calculate_cycle_length(previous_period, current_period):
+    if not previous_period or not current_period:
+        return None
+
+    previous_start = date.fromisoformat(
+        previous_period["start_date"]
+    )
+    current_start = date.fromisoformat(
+        current_period["start_date"]
+    )
+
+    return (current_start - previous_start).days
+
+
+def calculate_average_cycle(periods):
+    if len(periods) < 2:
+        return DEFAULT_CYCLE_LENGTH
+
+    cycle_lengths = []
+
+    for index in range(1, len(periods)):
+        current = periods[index - 1]
+        previous = periods[index]
+
+        length = calculate_cycle_length(previous, current)
+
+        if length and 15 <= length <= 60:
+            cycle_lengths.append(length)
+
+    if not cycle_lengths:
+        return DEFAULT_CYCLE_LENGTH
+
+    return round(sum(cycle_lengths) / len(cycle_lengths))
+
+
+def calculate_period_length(period):
+    if not period or not period["end_date"]:
+        return None
+
+    start = date.fromisoformat(period["start_date"])
+    end = date.fromisoformat(period["end_date"])
+
+    return (end - start).days + 1
+
+
+def calculate_average_period_length(periods):
+    lengths = []
+
+    for period in periods:
+        length = calculate_period_length(period)
+
+        if length and 1 <= length <= 15:
+            lengths.append(length)
+
+    if not lengths:
+        return DEFAULT_PERIOD_LENGTH
+
+    return round(sum(lengths) / len(lengths))
+
+
+def predict_next_period(last_period, average_cycle_length):
+    if not last_period:
+        return None
+
+    last_start = date.fromisoformat(last_period["start_date"])
+
+    return last_start + timedelta(days=average_cycle_length)
+
+
+def calculate_cycle_day(last_period):
+    if not last_period:
+        return None
+
+    start = date.fromisoformat(last_period["start_date"])
+
+    return (date.today() - start).days + 1
+
+
+# =========================================================
+# LANDING PAGE
+# =========================================================
+
 @app.route("/")
-def home():
-    return render_template(
-        "index.html", periods=get_periods(), insights=get_insights()
-    )
+def landing():
+    return render_template("landing.html")
 
 
-@app.route("/log-period", methods=["GET", "POST"])
-def log_period():
-    if request.method == "POST":
-        start = request.form.get("start_date", "").strip()
-        end = request.form.get("end_date", "").strip()
-        flow = request.form.get("flow", "").strip()
-        symptoms = request.form.getlist("symptoms")
-        notes = request.form.get("notes", "").strip()
-        if not start:
-            flash("Start date is required.", "error")
-        else:
-            valid = True
-            try:
-                start_date = date.fromisoformat(start)
-                end_date = date.fromisoformat(end) if end else None
-            except ValueError:
-                valid = False
-                flash("Dates must be in YYYY-MM-DD format.", "error")
+# =========================================================
+# REGISTER
+# =========================================================
 
-            if valid and end_date and end_date < start_date:
-                valid = False
-                flash("End date cannot be before the start date.", "error")
-            if valid and flow not in FLOW_LEVELS:
-                valid = False
-                flash("Pick a valid flow level.", "error")
-
-            if valid:
-                db = get_db()
-                db.execute(
-                    """
-                    INSERT INTO periods (start_date, end_date, flow, symptoms, notes)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        start_date.isoformat(),
-                        end_date.isoformat() if end_date else "",
-                        flow,
-                        ", ".join(sorted(set(symptoms))),
-                        notes,
-                    ),
-                )
-                db.commit()
-                flash("Period logged.", "success")
-                return redirect(url_for("log_period"))
-
-    return render_template(
-        "log_period.html",
-        symptoms=SYMPTOMS,
-        flow_levels=FLOW_LEVELS,
-        periods=get_periods(),
-        insights=get_insights(),
-    )
-
-
-with app.app_context():
-    init_db()
-
-if __name__ == "__main__":
-    app.run(debug=True)
-@app.route("/register")
+@app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -302,13 +344,393 @@ def signin():
 @login_required
 def logout():
     session.clear()
-    return redirect(url_for("login"))
+    return redirect(url_for("landing"))
+
+
+# =========================================================
+# DASHBOARD
+# =========================================================
+
 @app.route("/dashboard")
+@login_required
 def dashboard():
-    return render_template("dashboard.html")
+    user = get_current_user()
+    db = get_db()
+
+    periods = db.execute(
+        """
+        SELECT *
+        FROM periods
+        WHERE user_id = ?
+        ORDER BY start_date DESC, id DESC
+        """,
+        (user["id"],),
+    ).fetchall()
+
+    average_cycle_length = calculate_average_cycle(periods)
+    average_period_length = calculate_average_period_length(periods)
+    last_period = periods[0] if periods else None
+
+    next_period = predict_next_period(
+        last_period, average_cycle_length
+    )
+    cycle_day = calculate_cycle_day(last_period)
+
+    days_until_next_period = None
+    if next_period:
+        days_until_next_period = (next_period - date.today()).days
+
+    ovulation_date = None
+    fertile_start = None
+    fertile_end = None
+
+    if next_period:
+        ovulation_date = next_period - timedelta(days=14)
+        fertile_start = ovulation_date - timedelta(days=5)
+        fertile_end = ovulation_date
+
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+    current_day = today.day
+
+    month_calendar = calendar.monthcalendar(
+        current_year, current_month
+    )
+
+    period_dates = set()
+
+    for period in periods:
+        start = date.fromisoformat(period["start_date"])
+        end = (
+            date.fromisoformat(period["end_date"])
+            if period["end_date"]
+            else start
+        )
+
+        current = start
+
+        while current <= end:
+            if (
+                current.year == current_year
+                and current.month == current_month
+            ):
+                period_dates.add(current.day)
+
+            current += timedelta(days=1)
+
+    fertile_dates = set()
+
+    if fertile_start and fertile_end:
+        current = fertile_start
+
+        while current <= fertile_end:
+            if (
+                current.year == current_year
+                and current.month == current_month
+            ):
+                fertile_dates.add(current.day)
+
+            current += timedelta(days=1)
+
+    ovulation_day = None
+
+    if (
+        ovulation_date
+        and ovulation_date.year == current_year
+        and ovulation_date.month == current_month
+    ):
+        ovulation_day = ovulation_date.day
+
+    recent_periods = [
+        {
+            "period": period,
+            "duration": calculate_period_length(period),
+        }
+        for period in periods[:3]
+    ]
+
+    return render_template(
+        "dashboard.html",
+        user=user,
+        periods=periods,
+        last_period=last_period,
+        next_period=next_period,
+        cycle_day=cycle_day,
+        average_cycle_length=average_cycle_length,
+        average_period_length=average_period_length,
+        days_until_next_period=days_until_next_period,
+        ovulation_date=ovulation_date,
+        fertile_start=fertile_start,
+        fertile_end=fertile_end,
+        month_calendar=month_calendar,
+        current_month_name=calendar.month_name[current_month],
+        current_year=current_year,
+        current_day=current_day,
+        recent_periods=recent_periods,
+        period_dates=period_dates,
+        fertile_dates=fertile_dates,
+        ovulation_day=ovulation_day,
+    )
+
+
+# =========================================================
+# LOG PERIOD
+# =========================================================
+
+@app.route("/log-period", methods=["GET", "POST"])
+@login_required
+def log_period():
+    if request.method == "POST":
+        start_date = request.form.get("start_date", "").strip()
+        end_date = request.form.get("end_date", "").strip()
+        flow = request.form.get("flow", "").strip().lower()
+        selected_symptoms = request.form.getlist("symptoms")
+
+        if not start_date:
+            flash("Please select the first day of your period.", "error")
+            return render_template(
+                "log_period.html",
+                flow_levels=FLOW_LEVELS,
+                symptoms=SYMPTOMS,
+            )
+
+        try:
+            start = date.fromisoformat(start_date)
+            end = date.fromisoformat(end_date) if end_date else None
+        except ValueError:
+            flash("Please enter valid dates.", "error")
+            return render_template(
+                "log_period.html",
+                flow_levels=FLOW_LEVELS,
+                symptoms=SYMPTOMS,
+            )
+
+        if end and end < start:
+            flash(
+                "The end date cannot be before the start date.",
+                "error",
+            )
+            return render_template(
+                "log_period.html",
+                flow_levels=FLOW_LEVELS,
+                symptoms=SYMPTOMS,
+            )
+
+        if flow not in FLOW_LEVELS:
+            flash("Please select your flow level.", "error")
+            return render_template(
+                "log_period.html",
+                flow_levels=FLOW_LEVELS,
+                symptoms=SYMPTOMS,
+            )
+
+        if any(symptom not in SYMPTOMS for symptom in selected_symptoms):
+            flash("Please select valid symptoms.", "error")
+            return render_template(
+                "log_period.html",
+                flow_levels=FLOW_LEVELS,
+                symptoms=SYMPTOMS,
+            )
+
+        db = get_db()
+
+        db.execute(
+            """
+            INSERT INTO periods (
+                user_id, start_date, end_date, flow, symptoms
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                session["user_id"],
+                start.isoformat(),
+                end.isoformat() if end else None,
+                flow,
+                ", ".join(selected_symptoms),
+            ),
+        )
+
+        db.commit()
+
+        flash("Your period has been logged successfully.", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template(
+        "log_period.html",
+        flow_levels=FLOW_LEVELS,
+        symptoms=SYMPTOMS,
+    )
+
+
+# =========================================================
+# HISTORY
+# =========================================================
 
 @app.route("/history")
+@login_required
 def history():
-    return render_template("history.html")
+    user = get_current_user()
 
-app.run(debug=True)
+    periods = get_db().execute(
+        """
+        SELECT *
+        FROM periods
+        WHERE user_id = ?
+        ORDER BY start_date DESC, id DESC
+        """,
+        (user["id"],),
+    ).fetchall()
+
+    history_periods = [
+        {
+            "period": period,
+            "duration": calculate_period_length(period),
+        }
+        for period in periods
+    ]
+
+    return render_template(
+        "history.html",
+        user=user,
+        history_periods=history_periods,
+    )
+
+
+# =========================================================
+# EDIT PERIOD
+# =========================================================
+
+@app.route(
+    "/history/<int:period_id>/edit",
+    methods=["GET", "POST"],
+)
+@login_required
+def edit_period(period_id):
+    db = get_db()
+    user_id = session["user_id"]
+
+    period = db.execute(
+        """
+        SELECT *
+        FROM periods
+        WHERE id = ? AND user_id = ?
+        """,
+        (period_id, user_id),
+    ).fetchone()
+
+    if period is None:
+        flash("Period record not found.", "error")
+        return redirect(url_for("history"))
+
+    if request.method == "POST":
+        start_date = request.form.get("start_date", "").strip()
+        end_date = request.form.get("end_date", "").strip()
+        flow = request.form.get("flow", "").strip().lower()
+        selected_symptoms = request.form.getlist("symptoms")
+
+        if not start_date:
+            flash("Please select a start date.", "error")
+            return redirect(
+                url_for("edit_period", period_id=period_id)
+            )
+
+        try:
+            start = date.fromisoformat(start_date)
+            end = date.fromisoformat(end_date) if end_date else None
+        except ValueError:
+            flash("Please enter valid dates.", "error")
+            return redirect(
+                url_for("edit_period", period_id=period_id)
+            )
+
+        if end and end < start:
+            flash(
+                "The end date cannot be before the start date.",
+                "error",
+            )
+            return redirect(
+                url_for("edit_period", period_id=period_id)
+            )
+
+        if flow not in FLOW_LEVELS:
+            flash("Please select a valid flow level.", "error")
+            return redirect(
+                url_for("edit_period", period_id=period_id)
+            )
+
+        if any(symptom not in SYMPTOMS for symptom in selected_symptoms):
+            flash("Please select valid symptoms.", "error")
+            return redirect(
+                url_for("edit_period", period_id=period_id)
+            )
+
+        db.execute(
+            """
+            UPDATE periods
+            SET start_date = ?,
+                end_date = ?,
+                flow = ?,
+                symptoms = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                start.isoformat(),
+                end.isoformat() if end else None,
+                flow,
+                ", ".join(selected_symptoms),
+                period_id,
+                user_id,
+            ),
+        )
+
+        db.commit()
+
+        flash("Period record updated successfully.", "success")
+        return redirect(url_for("history"))
+
+    return render_template(
+        "edit_period.html",
+        period=period,
+        flow_levels=FLOW_LEVELS,
+        symptoms=SYMPTOMS,
+    )
+
+
+# =========================================================
+# DELETE PERIOD
+# =========================================================
+
+@app.post("/history/<int:period_id>/delete")
+@login_required
+def delete_period(period_id):
+    db = get_db()
+
+    cursor = db.execute(
+        """
+        DELETE FROM periods
+        WHERE id = ? AND user_id = ?
+        """,
+        (period_id, session["user_id"]),
+    )
+
+    db.commit()
+
+    if cursor.rowcount:
+        flash("Period record deleted.", "success")
+    else:
+        flash("Period record not found.", "error")
+
+    return redirect(url_for("history"))
+
+
+# =========================================================
+# INITIALIZE DATABASE AND RUN
+# =========================================================
+
+with app.app_context():
+    init_db()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
