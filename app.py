@@ -1,6 +1,3 @@
-app.py
-
-
 import calendar
 import os
 import sqlite3
