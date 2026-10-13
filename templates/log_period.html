@@ -1,330 +1,236 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Log Period &middot; Period Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        .log-page {
-            max-width: 760px;
-            margin: 0 auto;
-            padding: 2.5rem 1.25rem 4rem;
-        }
+{% extends "base.html" %}
 
-        .log-header {
-            margin-bottom: 1.5rem;
-        }
+{% block title %}Log Period | Periodly{% endblock %}
 
-        .log-header h1 {
-            font-size: 1.9rem;
-            font-weight: 400;
-            letter-spacing: -0.01em;
-            margin: 0 0 0.35rem;
-            color: var(--ink);
-        }
+{% block content %}
 
-        .log-lede {
-            color: var(--muted);
-            margin: 0;
-        }
+<section class="log-period-page">
 
-        .log-nav {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
-            padding: 0.3rem;
-            margin: 0 0 1.75rem;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            background: var(--surface);
-            width: fit-content;
-        }
+    <div class="log-period-header">
 
-        .log-nav a {
-            padding: 0.4rem 1rem;
-            border-radius: 999px;
-            font-size: 0.9rem;
-            color: var(--muted);
-            text-decoration: none;
-            transition: background 0.15s ease, color 0.15s ease;
-        }
+        <a
+            href="{{ url_for('dashboard') }}"
+            class="back-link"
+        >
+            ← Dashboard
+        </a>
 
-        .log-nav a:hover {
-            background: var(--accent-soft);
-            color: var(--accent);
-        }
+        <p class="dashboard-eyebrow">
+            CYCLE TRACKING
+        </p>
 
-        .log-nav a.is-active {
-            background: var(--accent);
-            color: #fff;
-        }
+        <h1>Log your period</h1>
 
-        .back-link {
-            display: inline-block;
-            margin-bottom: 1.25rem;
-            font-size: 0.9rem;
-            text-decoration: none;
-        }
+        <p>
+            Record your period details to help Periodly understand
+            your cycle and provide better estimates.
+        </p>
 
-        .period-form {
-            display: grid;
-            gap: 1.5rem;
-            box-shadow: 0 1px 2px rgba(43, 27, 34, 0.04),
-                        0 12px 32px rgba(43, 27, 34, 0.06);
-        }
+    </div>
 
-        .period-form .field {
-            gap: 0.5rem;
-        }
 
-        .period-form .field > label,
-        .period-form legend {
-            font-size: 0.8rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: var(--muted);
-        }
+    <form
+        method="POST"
+        class="log-period-form"
+    >
 
-        .date-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
+        <!-- Dates -->
 
-        .chip {
-            transition: background 0.15s ease, border-color 0.15s ease,
-                        color 0.15s ease, transform 0.1s ease;
-        }
+        <div class="form-section">
 
-        .chip:hover {
-            border-color: var(--accent);
-            transform: translateY(-1px);
-        }
+            <div class="form-section-heading">
 
-        textarea {
-            resize: vertical;
-            min-height: 96px;
-        }
+                <span class="section-number">
+                    01
+                </span>
 
-        .form-actions {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 0.5rem;
-            border-top: 1px solid var(--border);
-        }
+                <div>
+                    <h2>When was your period?</h2>
 
-        .form-actions .hint {
-            font-size: 0.85rem;
-        }
-
-        .insights .stats {
-            margin-bottom: 0.25rem;
-        }
-
-        .insights .stats li {
-            box-shadow: 0 1px 2px rgba(43, 27, 34, 0.04);
-        }
-
-        table {
-            box-shadow: 0 1px 2px rgba(43, 27, 34, 0.04);
-        }
-
-        .flow-tag {
-            display: inline-block;
-            padding: 0.15rem 0.6rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            background: var(--accent-soft);
-            color: var(--accent);
-        }
-
-        @media (max-width: 480px) {
-            .log-page {
-                padding: 1.75rem 1rem 3rem;
-            }
-
-            .log-header h1 {
-                font-size: 1.55rem;
-            }
-
-            .form-actions .btn {
-                width: 100%;
-                text-align: center;
-            }
-        }
-    </style>
-</head>
-<body>
-    <main class="page log-page">
-        <header class="log-header">
-            <h1>Log a period</h1>
-            <p class="log-lede">Record when it started, how it felt, and anything worth remembering.</p>
-        </header>
-
-        <nav class="log-nav" aria-label="Main">
-            {% for endpoint, label in [
-                ('home', 'Summary'),
-                ('log_period', 'Log period'),
-                ('history', 'History'),
-                ('dashboard', 'Dashboard')
-            ] %}
-                <a href="{{ url_for(endpoint) }}"
-                   {% if request.endpoint == endpoint %}class="is-active" aria-current="page"{% endif %}>{{ label }}</a>
-            {% endfor %}
-        </nav>
-
-        <a class="back-link" href="{{ url_for('home') }}">&larr; Back to summary</a>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flashes">
-                    {% for category, message in messages %}
-                        <li class="flash flash-{{ category }}">{{ message }}</li>
-                    {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
-
-        {% set chosen_flow = request.form.get('flow') or 'medium' %}
-        {% set chosen_symptoms = request.form.getlist('symptoms') %}
-
-        <form method="post" class="card period-form">
-            <div class="date-row">
-                <div class="field">
-                    <label for="start_date">Start date</label>
-                    <input type="date" id="start_date" name="start_date" required
-                           value="{{ request.form.get('start_date', '') }}">
+                    <p>
+                        Tell us when your period started and ended.
+                    </p>
                 </div>
 
-                <div class="field">
-                    <label for="end_date">End date <span class="hint">(optional)</span></label>
-                    <input type="date" id="end_date" name="end_date"
-                           value="{{ request.form.get('end_date', '') }}">
-                </div>
             </div>
 
-            <fieldset class="field">
-                <legend>Flow</legend>
-                <div class="chips">
-                    {% for level in flow_levels %}
-                        <label class="chip">
-                            <input type="radio" name="flow" value="{{ level }}"
-                                   {% if chosen_flow == level %}checked{% endif %}>
-                            <span>{{ level|capitalize }}</span>
-                        </label>
-                    {% endfor %}
-                </div>
-            </fieldset>
 
-            <fieldset class="field">
-                <legend>Symptoms</legend>
-                <div class="chips">
-                    {% for symptom in symptoms %}
-                        <label class="chip">
-                            <input type="checkbox" name="symptoms" value="{{ symptom }}"
-                                   {% if symptom in chosen_symptoms %}checked{% endif %}>
-                            <span>{{ symptom|capitalize }}</span>
-                        </label>
-                    {% endfor %}
-                </div>
-            </fieldset>
+            <div class="date-grid">
 
-            <div class="field">
-                <label for="notes">Notes</label>
-                <textarea id="notes" name="notes" rows="4"
-                          placeholder="Anything worth remembering...">{{ request.form.get('notes', '') }}</textarea>
+                <div class="form-group">
+
+                    <label for="start_date">
+                        Start date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="start_date"
+                        name="start_date"
+                        value="{{ request.form.get('start_date', '') }}"
+                        required
+                    >
+
+                    <span class="input-help">
+                        The first day of your period
+                    </span>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="end_date">
+                        End date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="end_date"
+                        name="end_date"
+                        value="{{ request.form.get('end_date', '') }}"
+                    >
+
+                    <span class="input-help">
+                        Leave blank if your period is ongoing
+                    </span>
+
+                </div>
+
             </div>
 
-            <div class="form-actions">
-                <button type="submit" class="btn">Save period</button>
-                <span class="hint">Saved entries appear in your history right away.</span>
+        </div>
+
+
+        <!-- Flow -->
+
+        <div class="form-section">
+
+            <div class="form-section-heading">
+
+                <span class="section-number">
+                    02
+                </span>
+
+                <div>
+                    <h2>How was your flow?</h2>
+
+                    <p>
+                        Choose the flow level that best describes your period.
+                    </p>
+                </div>
+
             </div>
-        </form>
 
-        <section class="insights">
-            <h2>Your averages</h2>
-            <ul class="stats">
-                <li>
-                    <span class="stat-value">{{ insights.avg_cycle }}</span>
-                    avg cycle length
-                </li>
-                <li>
-                    <span class="stat-value">{{ insights.avg_period }}</span>
-                    avg period length
-                </li>
-                {% if insights.next_start %}
-                    <li>
-                        <span class="stat-value">{{ insights.next_start.isoformat() }}</span>
-                        next expected period
-                    </li>
-                {% endif %}
-            </ul>
-        </section>
 
-        <section class="history">
-            <h2>History</h2>
-            {% if periods %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Flow</th>
-                            <th>Symptoms</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for period in periods %}
-                            <tr>
-                                <td><time datetime="{{ period.start_date }}">{{ period.start_date }}</time></td>
-                                <td>
-                                    {% if period.end_date %}
-                                        <time datetime="{{ period.end_date }}">{{ period.end_date }}</time>
-                                    {% else %}
-                                        <span class="empty">Ongoing</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="flow-tag">{{ period.flow|capitalize }}</span></td>
-                                <td>{{ period.symptoms or '—' }}</td>
-                                <td>{{ period.notes or '—' }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <p class="empty">Nothing logged yet. Your first entry sets the baseline.</p>
-            {% endif %}
-        </section>
-    </main>
+            <div class="flow-options">
 
-    <script>
-        (function () {
-            var start = document.getElementById('start_date');
-            var end = document.getElementById('end_date');
+                {% for flow in flow_levels %}
 
-            if (!start || !end) {
-                return;
-            }
+                <label class="flow-option">
 
-            function sync() {
-                if (!start.value) {
-                    end.removeAttribute('min');
-                    return;
-                }
-                end.min = start.value;
-                if (end.value && end.value < start.value) {
-                    end.value = '';
-                }
-            }
+                    <input
+                        type="radio"
+                        name="flow"
+                        value="{{ flow }}"
+                        {% if request.form.get('flow') == flow %}
+                            checked
+                        {% endif %}
+                        required
+                    >
 
-            start.addEventListener('change', sync);
-            sync();
-        })();
-    </script>
-</body>
-</html>
+                    <span class="flow-option-content">
+
+                        <span class="flow-dot flow-{{ flow }}"></span>
+
+                        <span class="flow-name">
+                            {{ flow|capitalize }}
+                        </span>
+
+                    </span>
+
+                </label>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+        <!-- Symptoms -->
+
+        <div class="form-section">
+
+            <div class="form-section-heading">
+
+                <span class="section-number">
+                    03
+                </span>
+
+                <div>
+                    <h2>Any symptoms?</h2>
+
+                    <p>
+                        Select everything you've experienced.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="symptom-grid">
+
+                {% for symptom in symptoms %}
+
+                <label class="symptom-option">
+
+                    <input
+                        type="checkbox"
+                        name="symptoms"
+                        value="{{ symptom }}"
+                        {% if symptom in request.form.getlist('symptoms') %}
+                            checked
+                        {% endif %}
+                    >
+
+                    <span class="symptom-check"></span>
+
+                    <span>
+                        {{ symptom|capitalize }}
+                    </span>
+
+                </label>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+        <!-- Submit -->
+
+        <div class="log-period-actions">
+
+            <a
+                href="{{ url_for('dashboard') }}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Save Period
+            </button>
+
+        </div>
+
+    </form>
+
+</section>
+
+{% endblock %}

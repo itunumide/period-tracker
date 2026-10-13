@@ -1,137 +1,92 @@
-```html
-<!DOCTYPE html>
-<html lang="en">
+register.html
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
 
-    <title>Create Account | Period Tracker</title>
+{% block title %}Create Account | Periodly{% endblock %}
 
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='css/style.css') }}"
-    >
-</head>
+{% block content %}
 
-<body>
+<section class="auth-page">
 
-    <main class="auth-page">
+    <div class="auth-card">
 
-        <section class="auth-container">
+        <div class="auth-header">
+            <span class="auth-icon">🌸</span>
 
-            <div class="auth-header">
+            <h1>Create your account</h1>
 
-                <h1>Create an Account</h1>
+            <p>
+                Start understanding your cycle with Periodly.
+            </p>
+        </div>
 
-                <p>
-                    Create an account to start tracking your cycle.
-                </p>
+        <form method="POST" class="auth-form">
 
+            <div class="form-group">
+                <label for="name">Full name</label>
+
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    placeholder="Enter your name"
+                    value="{{ request.form.get('name', '') }}"
+                    required
+                >
             </div>
 
+            <div class="form-group">
+                <label for="email">Email address</label>
 
-            <form
-                action="{{ url_for('register') }}"
-                method="POST"
-                class="auth-form"
-            >
-
-                <div class="form-group">
-
-                    <label for="name">
-                        Full Name
-                    </label>
-
-                    <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        placeholder="Enter your name"
-                        autocomplete="name"
-                        required
-                    >
-
-                </div>
-
-
-                <div class="form-group">
-
-                    <label for="email">
-                        Email Address
-                    </label>
-
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        placeholder="Enter your email"
-                        autocomplete="email"
-                        required
-                    >
-
-                </div>
-
-
-                <div class="form-group">
-
-                    <label for="password">
-                        Password
-                    </label>
-
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Create a password"
-                        autocomplete="new-password"
-                        required
-                    >
-
-                </div>
-
-
-                <div class="form-group">
-
-                    <label for="confirm_password">
-                        Confirm Password
-                    </label>
-
-                    <input
-                        type="password"
-                        id="confirm_password"
-                        name="confirm_password"
-                        placeholder="Confirm your password"
-                        autocomplete="new-password"
-                        required
-                    >
-
-                </div>
-
-
-                <button type="submit" class="btn">
-                    Create Account
-                </button>
-
-            </form>
-
-
-            <div class="auth-footer">
-
-                <p>
-                    Already have an account?
-                    <a href="{{ url_for('login') }}">
-                        Log in
-                    </a>
-                </p>
-
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    placeholder="you@example.com"
+                    value="{{ request.form.get('email', '') }}"
+                    required
+                >
             </div>
 
-        </section>
+            <div class="form-group">
+                <label for="password">Password</label>
 
-    </main>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="Create a password"
+                    required
+                >
+            </div>
 
-</body>
+            <div class="form-group">
+                <label for="confirm_password">
+                    Confirm password
+                </label>
 
-</html>
-```
+                <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    placeholder="Enter your password again"
+                    required
+                >
+            </div>
+
+            <button type="submit" class="primary-button">
+                Create Account
+            </button>
+
+        </form>
+
+        <p class="auth-footer">
+            Already have an account?
+            <a href="{{ url_for('signin') }}">Sign in</a>
+        </p>
+
+    </div>
+
+</section>
+
+{% endblock %}
